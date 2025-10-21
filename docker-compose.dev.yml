@@ -45,7 +45,9 @@ services:
 
   # ClickHouse for financial data
   clickhouse:
-    image: clickhouse/clickhouse-server:22.3
+    build:
+      context: .
+      dockerfile: Dockerfile.clickhouse
     container_name: fdc-clickhouse
     restart: unless-stopped
     ports:
@@ -53,31 +55,17 @@ services:
       - "9000:9000"
     environment:
       - CLICKHOUSE_INIT_DEBUG=1
-    build:
-      context: .
-      dockerfile: Dockerfile.clickhouse
-
-
-    user: "1001:1001"
     volumes:
-      - ./config/clickhouse:/etc/clickhouse-server:ro
       - ./data/clickhouse:/var/lib/clickhouse
       - ./logs/clickhouse:/var/log/clickhouse-server
-    
-    # Temporarily removed memory limits to troubleshoot initialization
-    # deploy:
-    #   resources:
-    #     limits:
-    #       memory: 6G
-    #     reservations:
-    #       memory: 3G
     healthcheck:
       test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      interval: 15s
+      timeout: 10s
+      retries: 10
     networks:
       - fdc-network
+
 
   # Tabix Web UI for ClickHouse
   tabix:
