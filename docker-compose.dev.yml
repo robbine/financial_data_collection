@@ -172,6 +172,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - DEBUG=true
       - LOG_LEVEL=DEBUG
+      - PYTHONPATH=/app/src:/app
     volumes:
       - ./config/app:/app/config
     depends_on:
@@ -179,8 +180,13 @@ services:
       - redis
     networks:
       - fdc-network
-    user: "900:900"
-    command: ["celery", "-A", "src.financial_data_collector.core.tasks.celery_app", "worker", "--loglevel=info", "--concurrency=2"]
+    user: "root"
+    command: ["celery", "-A", "financial_data_collector.core.tasks.celery_app", "worker", "--loglevel=info", "--concurrency=2"]
+    healthcheck:
+      test: ["CMD", "celery", "-A", "financial_data_collector.core.tasks.celery_app", "inspect", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # Celery Beat for scheduled tasks
   celery-beat:
@@ -196,6 +202,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - DEBUG=true
       - LOG_LEVEL=DEBUG
+      - PYTHONPATH=/app/src:/app
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
@@ -205,11 +212,11 @@ services:
       - redis
     networks:
       - fdc-network
-    command: ["celery", "-A", "src.financial_data_collector.core.tasks.celery_app", "beat", "--loglevel=info"]
+    command: ["celery", "-A", "financial_data_collector.core.tasks.celery_app", "beat", "--loglevel=info"]
     healthcheck:
-      test: ["CMD", "celery", "-A", "src.financial_data_collector.core.tasks.celery_app", "beat", "--version"]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD-SHELL", "ps aux | grep 'celery -A financial_data_collector.core.tasks.celery_app beat' | grep -v grep || exit 1"]
+      interval: 45s
+      timeout: 15s
       retries: 3
     user: "root"
 
