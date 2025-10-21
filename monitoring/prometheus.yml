@@ -1,0 +1,108 @@
+# Prometheus configuration for Financial Data Collector
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'financial-data-collector'
+    environment: 'production'
+
+rule_files:
+  - "rules/*.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+scrape_configs:
+  # Financial Data Collector application
+  - job_name: 'financial-data-collector'
+    static_configs:
+      - targets: ['financial-data-collector:8000']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    honor_labels: true
+    params:
+      format: ['prometheus']
+
+  # PostgreSQL database
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres:5432']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # Redis cache
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # MongoDB
+  - job_name: 'mongodb'
+    static_configs:
+      - targets: ['mongodb:27017']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # Elasticsearch
+  - job_name: 'elasticsearch'
+    static_configs:
+      - targets: ['elasticsearch:9200']
+    metrics_path: '/_prometheus/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # Node exporter (if available)
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # cAdvisor (if available)
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # Nginx
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx:80']
+    metrics_path: '/nginx_status'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+# Recording rules
+recording_rules:
+  - name: 'financial_data_collector'
+    rules:
+      - record: 'fdc:request_rate'
+        expr: 'rate(http_requests_total[5m])'
+        labels:
+          service: 'financial-data-collector'
+      
+      - record: 'fdc:error_rate'
+        expr: 'rate(http_requests_total{status=~"5.."}[5m])'
+        labels:
+          service: 'financial-data-collector'
+      
+      - record: 'fdc:response_time_p95'
+        expr: 'histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))'
+        labels:
+          service: 'financial-data-collector'
+      
+      - record: 'fdc:active_connections'
+        expr: 'pg_stat_activity_count'
+        labels:
+          service: 'postgres'
+      
+      - record: 'fdc:redis_memory_usage'
+        expr: 'redis_memory_used_bytes / redis_memory_max_bytes * 100'
+        labels:
+          service: 'redis'

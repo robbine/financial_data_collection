@@ -1,0 +1,18 @@
+{
+    "headers": {
+      "accept": "text/html, application/xhtml+xml",
+      "accept-language": "zh-CN,zh;q=0.9",
+      "if-none-match": "W/\"b1052708fdabb5bb8e8de4d98eb61e51\"",
+      "priority": "u=1, i",
+      "sec-ch-ua": "\"Not;A=Brand\";v=\"99\", \"Brave\";v=\"139\", \"Chromium\";v=\"139\"",
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": "\"Windows\"",
+      "sec-fetch-dest": "empty",
+      "sec-fetch-mode": "cors",
+      "sec-fetch-site": "same-origin",
+      "sec-gpc": "1",
+      "turbo-frame": "user-profile-frame",
+      "x-github-client-version": "a333f604f1f1690df9ca54be738a82757a2f7b44",
+      "Cookie": "_device_id=ce35a8fc13b0c23c9e09529dc9ce7b02; _octo=GH1.1.1965913937.1753666539; saved_user_sessions=16010351%3AAjzsRQ6Bp8kqrDwUj59wWCKDmT5qPS4-4N9Y8JEhacQ56-uR%7C216634616%3ADMniqSSYSMoEBrkVAoXwmFvSQzeh6t9yX4VQ9flYL3B1etMa; user_session=AjzsRQ6Bp8kqrDwUj59wWCKDmT5qPS4-4N9Y8JEhacQ56-uR; __Host-user_session_same_site=AjzsRQ6Bp8kqrDwUj59wWCKDmT5qPS4-4N9Y8JEhacQ56-uR; logged_in=yes; dotcom_user=robbine; color_mode=%7B%22color_mode%22%3A%22auto%22%2C%22light_theme%22%3A%7B%22name%22%3A%22light%22%2C%22color_mode%22%3A%22light%22%7D%2C%22dark_theme%22%3A%7B%22name%22%3A%22dark%22%2C%22color_mode%22%3A%22dark%22%7D%7D; GHCC=Required:1-Analytics:0-SocialMedia:0-Advertising:0; cpu_bucket=sm; preferred_color_mode=dark; tz=Asia%2FShanghai; _gh_sess=3aUl8O1JkivE5Zvk9hr4wuRf%2BT5x1it1AU9YRkEfjTKAHkZimh3hdw%2FACxl87Lmvb8Kg6g%2FX2hOKVcn%2B3WLdz%2BhI%2BJwy7ZITUc6wzB7Is8wO6JyPjc%2FLFUrIJ3dnHnmog1%2BGUr0gL7hVgIYXN%2FEIJYmGJ%2F6CJsFxLEafqgR09gyWYdQuDl2%2Fs08EcJ1M2LT8yaJqcJvPsk0NToAOZ%2B7%2FA4p1THk4fNzXjwn5Pif4TPtHo4vSfmQJ%2F3XFNhglkMZcja%2BAe6F8zcHgQLdEQBojfXuRnCpX9UD%2B1M2u1yACgbjMa08oWw0V3wnue9hLkzQIJOn3ipoPgV3s77E5%2F5%2Be4OiwkbSET8rNVix5rg78xU0gjYFvASJ1v6f6C1LjALSafPd9mOk4Ax89Z9dEWNiHo5SBpJo%3D--kE%2FqqTJJEETYF0un--1gUsBzMeAs1M5Otx3gB18g%3D%3D"
+    }
+  }

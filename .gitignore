@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.class
+*.so
+.Python
+env/
+build/
+dist/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 环境变量和敏感信息
+.env
+.env.example
+
+# 数据和日志
+data/
+logs/
+
+# Docker
+.dockerignore
+*.dockerfile
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

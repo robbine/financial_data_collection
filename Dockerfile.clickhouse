@@ -1,0 +1,14 @@
+FROM yandex/clickhouse-server:latest
+
+# 修改现有用户ID和组ID为101
+RUN groupmod -g 101 clickhouse && usermod -u 101 -g 101 clickhouse
+# 复制配置文件并设置权限
+COPY ./config/clickhouse/clickhouse-server.xml /etc/clickhouse-server/
+COPY ./config/clickhouse/users.xml /etc/clickhouse-server/
+RUN chown -R 101:101 /etc/clickhouse-server/ /var/lib/clickhouse && \
+    find /etc/clickhouse-server/ -type f -exec chmod 644 {} + && \
+    find /etc/clickhouse-server/ -type d -exec chmod 755 {} +
+
+EXPOSE 8123 9000
+
+CMD ["/entrypoint.sh"]

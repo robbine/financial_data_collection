@@ -1,0 +1,128 @@
+# Development Configuration for Financial Data Collector
+app:
+  name: "Financial Data Collector - Development"
+  version: "1.0.0"
+  debug: true
+  log_level: "DEBUG"
+
+# Database configuration
+database:
+  url: "postgresql://fdc_user:fdc_password@postgres:5432/fdc_db"
+  pool_size: 5
+  max_overflow: 10
+  echo: true  # Log SQL queries
+
+# Redis configuration
+redis:
+  url: "redis://redis:6379/0"
+  max_connections: 10
+  socket_timeout: 5
+  socket_connect_timeout: 5
+
+# API configuration
+api:
+  host: "0.0.0.0"
+  port: 8000
+  debug: true
+  cors:
+    enabled: true
+    origins: ["*"]
+  rate_limiting:
+    enabled: false  # Disable in development
+
+# Logging configuration
+logging:
+  level: "DEBUG"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  handlers:
+    console:
+      enabled: true
+      level: "DEBUG"
+    file:
+      enabled: true
+      level: "DEBUG"
+      filename: "/app/logs/fdc-dev.log"
+      max_bytes: 10485760
+      backup_count: 5
+
+# Development specific settings
+development:
+  hot_reload: true
+  auto_reload: true
+  debug_toolbar: true
+  profiling: true
+  mock_external_apis: true
+
+# Security (relaxed for development)
+security:
+  api_key_required: false
+  encryption:
+    enabled: false
+
+# Performance (relaxed for development)
+performance:
+  max_memory_usage: "1GB"
+  gc_threshold: 0.9
+  async_workers: 5
+  connection_pool_size: 10
+
+# ClickHouse configuration
+clickhouse:
+  host: clickhouse
+  port: 9000
+  database: financial_data
+  username: default
+  password: default_password
+  secure: false
+  verify: false
+  max_connections: 10
+  connection_timeout: 10
+  query_timeout: 30
+  compression: true
+  batch_size: 1000
+  flush_interval: 5
+
+# WebCrawler configuration
+web_crawler:
+  storage:
+    enabled: true  # 默认启用
+    auto_store: true
+    strategy: "primary_only"
+    backends:
+      - name: "clickhouse"
+        type: "primary"
+        config:
+          host: "clickhouse"
+          port: 9000
+          database: "financial_data"
+          username: "default"
+          password: ""
+
+# Enhanced WebCrawler configuration
+enhanced_crawler:
+  storage:
+    enabled: true
+    auto_store: true
+    strategy: "primary_only"
+
+modules:
+  # 核心基础设施模块
+  config_manager:
+    class: src.financial_data_collector.core.config.manager.ConfigManager
+    enabled: true
+    dependencies: []
+  # 数据处理模块
+  data_cleaner:
+    class: src.financial_data_collector.core.processor.data_cleaner.DataCleaner
+    dependencies: ["config_manager"]
+    enabled: true
+  # 任务调度模块
+  task_scheduler:
+    class: src.financial_data_collector.core.scheduler.task_scheduler.TaskScheduler
+    enabled: true
+    dependencies: ["config_manager"]
+  # 存储模块
+  clickhouse_storage:
+    class: src.financial_data_collector.core.storage.clickhouse_storage.ClickHouseStorage
+    dependencies: ["config_manager"]
+    enabled: true

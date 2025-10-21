@@ -1,0 +1,35 @@
+<yandex>
+  <profiles>
+    <default>
+      <background_merges_mutations_concurrency_ratio>2</background_merges_mutations_concurrency_ratio>
+      <background_schedule_pool_size>16</background_schedule_pool_size>
+      <background_fetches_pool_size>8</background_fetches_pool_size>
+      <background_common_pool_size>8</background_common_pool_size>
+      <http_max_field_value_size>1048576</http_max_field_value_size>  <!-- 修正缩进，统一嵌套在default内 -->
+      <max_memory_usage>10000000000</max_memory_usage> <!-- 10GB -->
+      <query_profiler_real_time_period_ns>1000000000</query_profiler_real_time_period_ns>
+      <query_profiler_cpu_time_period_ns>1000000000</query_profiler_cpu_time_period_ns>
+      <max_bytes_before_external_group_by>10000000000</max_bytes_before_external_group_by>
+      <max_bytes_before_external_sort>20000000000</max_bytes_before_external_sort>
+      <max_ast_depth>1000</max_ast_depth>
+      <max_ast_elements>50000</max_ast_elements>
+      <max_expanded_ast_elements>500000</max_expanded_ast_elements>
+      <http_max_field_name_size>2048</http_max_field_name_size>
+      <allow_experimental_projection_optimization>1</allow_experimental_projection_optimization>
+      <allow_experimental_window_functions>1</allow_experimental_window_functions>
+    </default>
+  </profiles>
+  <users>
+    <default>
+      <networks>
+        <!-- 生产环境建议限制IP，例如只允许内网：<ip>192.168.0.0/16</ip> -->
+        <ip>::/0</ip>  <!-- 保持原有全IP访问，如需限制可修改此处 -->
+      </networks>
+      <profile>default</profile>
+      <quota>default</quota>
+      <!-- 移除冲突的password配置，保留无密码登录（如需密码可替换为哈希值） -->
+      <no_password>1</no_password>
+    </default>
+  </users>
+</yandex>
+

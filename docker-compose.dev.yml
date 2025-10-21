@@ -1,0 +1,244 @@
+
+services:
+  # Development application
+  financial-data-collector-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        USER_ID: ${USER_ID:-1000}
+        GROUP_ID: ${GROUP_ID:-1000}
+      target: development
+    container_name: fdc-dev-app
+    restart: unless-stopped
+    ports:
+      - "8002:8000"
+    environment:
+      - CONFIG_FILE=/app/config/development.yaml
+      - CONFIG_ENV=development
+      - DATABASE_URL=postgresql://fdc_user:fdc_password@postgres:5432/fdc_db
+      - REDIS_URL=redis://redis:6379/0
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - PYTHONPATH=/app
+    volumes:
+        - data_volume:/app/data
+        - ./logs:/app/logs
+        - ./config/app:/app/config
+        - /app/entrypoint.sh
+        - data_volume:/app/data
+    user: "root:root"  # 临时使用root用户测试权限问题
+    depends_on:
+      - postgres
+      - redis
+      - clickhouse
+    networks:
+      - fdc-network
+    
+    
+    
+    
+    
+    
+    
+    command: ["python", "-m", "src.financial_data_collector.main", "--debug"]
+
+  # ClickHouse for financial data
+  clickhouse:
+    image: clickhouse/clickhouse-server:22.3
+    container_name: fdc-clickhouse
+    restart: unless-stopped
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    environment:
+      - CLICKHOUSE_INIT_DEBUG=1
+    build:
+      context: .
+      dockerfile: Dockerfile.clickhouse
+
+
+    user: "1001:1001"
+    volumes:
+      - ./config/clickhouse:/etc/clickhouse-server:ro
+      - ./data/clickhouse:/var/lib/clickhouse
+      - ./logs/clickhouse:/var/log/clickhouse-server
+    
+    # Temporarily removed memory limits to troubleshoot initialization
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 6G
+    #     reservations:
+    #       memory: 3G
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fdc-network
+
+  # Tabix Web UI for ClickHouse
+  tabix:
+    image: spoonest/clickhouse-tabix-web-client:latest
+    container_name: fdc-tabix
+    restart: unless-stopped
+    ports:
+      - "8082:80"
+    depends_on:
+      - clickhouse
+    networks:
+      - fdc-network
+    command: ["nginx", "-g", "daemon off;"]
+
+  # PostgreSQL for development
+  postgres:
+    image: postgres:15-alpine
+    container_name: fdc-dev-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=fdc_db
+      - POSTGRES_USER=fdc_user
+      - POSTGRES_PASSWORD=fdc_password
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    ports:
+      - "5432:5432"
+    networks:
+      - fdc-network
+
+  # Redis for development
+  redis:
+    image: redis:7-alpine
+    container_name: fdc-dev-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_dev_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - fdc-network
+
+  # Jupyter notebook for data analysis
+  jupyter:
+    image: jupyter/scipy-notebook:latest
+    container_name: fdc-jupyter
+    restart: unless-stopped
+    ports:
+      - "8888:8888"
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+      - JUPYTER_TOKEN=dev_token_123
+    volumes:
+      - ./notebooks:/home/jovyan/work
+      - ./data:/home/jovyan/data
+    networks:
+      - fdc-network
+
+  # pgAdmin for database management
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: fdc-pgadmin
+    restart: unless-stopped
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@fdc.local
+      - PGADMIN_DEFAULT_PASSWORD=admin
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    networks:
+      - fdc-network
+
+  # Celery Worker for task processing
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+      args:
+        USER_ID: 1000
+        GROUP_ID: 1000
+    container_name: fdc-celery-worker
+    restart: unless-stopped
+    environment:
+      - CONFIG_FILE=/app/config/development.yaml
+      - DATABASE_URL=postgresql://fdc_user:fdc_password@postgres:5432/fdc_db
+      - REDIS_URL=redis://redis:6379/0
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - ./config/app:/app/config
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - fdc-network
+    user: "900:900"
+    command: ["celery", "-A", "src.financial_data_collector.core.tasks.celery_app", "worker", "--loglevel=info", "--concurrency=2"]
+
+  # Celery Beat for scheduled tasks
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: fdc-celery-beat
+    restart: unless-stopped
+    environment:
+      - CONFIG_FILE=/app/config/development.yaml
+      - DATABASE_URL=postgresql://fdc_user:fdc_password@postgres:5432/fdc_db
+      - REDIS_URL=redis://redis:6379/0
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./config/app:/app/config
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - fdc-network
+    command: ["celery", "-A", "src.financial_data_collector.core.tasks.celery_app", "beat", "--loglevel=info"]
+    healthcheck:
+      test: ["CMD", "celery", "-A", "src.financial_data_collector.core.tasks.celery_app", "beat", "--version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    user: "root"
+
+  # Redis Commander for Redis management
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: fdc-redis-commander
+    restart: unless-stopped
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - fdc-network
+
+volumes:
+  postgres_dev_data:
+    driver: local
+  redis_dev_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+  clickhouse_data:
+    driver: local
+  data_volume:
+    driver: local
+
+networks:
+  fdc-network:
+    driver: bridge

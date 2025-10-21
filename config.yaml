@@ -1,0 +1,368 @@
+# Financial Data Collector Configuration
+# This file contains the configuration for the modular financial data collector system
+
+# Application settings
+app:
+  name: "Financial Data Collector"
+  version: "1.0.0"
+  debug: false
+  log_level: "INFO"
+
+# Dependency injection configuration
+services:
+  config_manager:
+    class: "src.financial_data_collector.core.config.manager.ConfigManager"
+    singleton: true
+  
+  event_bus:
+    class: "src.financial_data_collector.core.events.event_bus.EventBus"
+    singleton: true
+    max_workers: 10
+  
+  module_manager:
+    class: "src.financial_data_collector.core.module_manager.ModuleManager"
+    singleton: true
+  
+  health_monitor:
+    class: "src.financial_data_collector.core.health_checker.HealthMonitor"
+    singleton: true
+
+# Event system configuration
+event_handlers:
+  data_collected:
+    handler: "src.financial_data_collector.core.handlers.data_handler.handle_data_collected"
+  
+  task_completed:
+    handler: "src.financial_data_collector.core.handlers.task_handler.handle_task_completed"
+  
+  error_occurred:
+    handler: "src.financial_data_collector.core.handlers.error_handler.handle_error"
+
+# Plugin discovery and configuration
+plugin_discovery_paths:
+  - "src/financial_data_collector/core/plugins/builtins"
+  - "plugins"
+
+plugins:
+  SentimentAnalysis:
+    enabled: true
+    config:
+      sensitivity_threshold: 0.1
+      positive_keywords: []
+      negative_keywords: []
+      neutral_keywords: []
+  
+  EntityExtraction:
+    enabled: true
+    config:
+      extract_confidence: true
+      min_confidence: 0.5
+      custom_patterns: {}
+      custom_company_patterns: []
+      custom_financial_terms: []
+  
+  DataClassification:
+    enabled: true
+    config:
+      multi_class: true
+      min_confidence: 0.3
+      include_metadata: true
+      custom_rules: {}
+      custom_source_patterns: {}
+
+# Middleware configuration
+middleware:
+  logging:
+    class: "src.financial_data_collector.core.middleware.logging.LoggingMiddleware"
+    enabled: true
+    config:
+      log_level: "INFO"
+      log_data: false
+  
+  validation:
+    class: "src.financial_data_collector.core.middleware.validation.ValidationMiddleware"
+    enabled: true
+    config:
+      required_fields: []
+      schema: {}
+  
+  performance:
+    class: "src.financial_data_collector.core.middleware.logging.PerformanceMiddleware"
+    enabled: true
+    config:
+      threshold_seconds: 1.0
+  
+  data_quality:
+    class: "src.financial_data_collector.core.middleware.validation.DataQualityMiddleware"
+    enabled: true
+    config:
+      check_null: true
+      check_empty: true
+      check_duplicates: false
+      null_threshold: 0.5
+
+# Module configuration
+modules:
+  # Configuration management
+  config_manager:
+    class: "src.financial_data_collector.core.config.manager.ConfigManager"
+    enabled: true
+    dependencies: []
+    startup_order: 1
+    shutdown_order: 10
+    config:
+      config_file: "config.yaml"
+      auto_reload: true
+      validation_enabled: true
+    health_check:
+      enabled: true
+      interval: 30
+      timeout: 10
+      retry_count: 3
+      retry_delay: 5
+      alert_threshold: 3
+      recovery_threshold: 2
+  
+  # Data collection modules
+  web_crawler:
+    class: "src.financial_data_collector.core.crawler.web_crawler.WebCrawler"
+    enabled: true
+    dependencies: ["config_manager"]
+    startup_order: 2
+    shutdown_order: 8
+    config:
+      browser:
+        browser_type: "chromium"
+        headless: true
+        viewport:
+          width: 1920
+          height: 1080
+        user_agent: "Financial Data Collector 1.0"
+      extraction_strategy: "llm"  # llm or css
+      request_delay: 1.0
+      max_retries: 3
+      timeout: 30
+      max_concurrent_requests: 5
+      chunk_size: 1000
+      overlap_size: 200
+      financial_selectors:
+        price: [".price", ".quote-price", "[data-testid*='price']"]
+        volume: [".volume", ".quote-volume", "[data-testid*='volume']"]
+        change: [".change", ".quote-change", "[data-testid*='change']"]
+        market_cap: [".market-cap", ".market-value", "[data-testid*='market-cap']"]
+        news: [".news-item", ".article", ".story"]
+        financial_data: [".financial-data", ".market-data", ".quote-data"]
+      llm_config:
+        provider: "openai"
+        model: "gpt-4"
+        api_token: "${OPENAI_API_KEY}"
+    health_check:
+      enabled: true
+      interval: 60
+      timeout: 15
+  
+  api_collector:
+    class: "src.financial_data_collector.core.crawler.api_crawler.APICollector"
+    enabled: true
+    dependencies: ["config_manager"]
+    startup_order: 2
+    shutdown_order: 8
+    config:
+      rate_limit: 100  # requests per minute
+      timeout: 30
+      retry_count: 3
+      authentication:
+        type: "api_key"
+        key: "${API_KEY}"
+    health_check:
+      enabled: true
+      interval: 60
+      timeout: 15
+  
+  database_collector:
+    class: "src.financial_data_collector.core.crawler.database_crawler.DatabaseCollector"
+    enabled: false
+    dependencies: ["config_manager"]
+    startup_order: 2
+    shutdown_order: 8
+    config:
+      connection_string: "${DATABASE_URL}"
+      query_timeout: 30
+      batch_size: 1000
+    health_check:
+      enabled: true
+      interval: 120
+      timeout: 20
+  
+  # Data processing modules
+  data_cleaner:
+    class: "src.financial_data_collector.core.processor.data_cleaner.DataCleaner"
+    enabled: true
+    dependencies: ["config_manager"]
+    startup_order: 3
+    shutdown_order: 7
+    config:
+      remove_duplicates: true
+      fill_missing_values: true
+      normalize_text: true
+      remove_outliers: false
+    health_check:
+      enabled: true
+      interval: 60
+      timeout: 10
+  
+  ai_processor:
+    class: "src.financial_data_collector.core.processor.ai_processor.AIProcessor"
+    enabled: true
+    dependencies: ["config_manager"]
+    startup_order: 3
+    shutdown_order: 7
+    config:
+      model_name: "gpt-4"
+      max_tokens: 4000
+      temperature: 0.1
+      batch_size: 10
+    health_check:
+      enabled: true
+      interval: 60
+      timeout: 30
+  
+  pit_converter:
+    class: "src.financial_data_collector.core.processor.pit_converter.PITConverter"
+    enabled: true
+    dependencies: ["config_manager"]
+    startup_order: 3
+    shutdown_order: 7
+    config:
+      output_format: "parquet"
+      compression: "snappy"
+      include_metadata: true
+    health_check:
+      enabled: true
+      interval: 60
+      timeout: 15
+  
+  # Task scheduling
+  task_scheduler:
+    class: "src.financial_data_collector.core.scheduler.task_scheduler.TaskScheduler"
+    enabled: true
+    dependencies: ["config_manager"]
+    startup_order: 4
+    shutdown_order: 6
+    config:
+      max_concurrent_tasks: 10
+      task_timeout: 3600
+      retry_failed_tasks: true
+      max_retries: 3
+    health_check:
+      enabled: true
+      interval: 30
+      timeout: 10
+  
+  job_manager:
+    class: "src.financial_data_collector.core.scheduler.job_manager.JobManager"
+    enabled: true
+    dependencies: ["task_scheduler"]
+    startup_order: 5
+    shutdown_order: 5
+    config:
+      job_queue_size: 1000
+      job_retention_days: 30
+      cleanup_interval: 3600
+    health_check:
+      enabled: true
+      interval: 30
+      timeout: 10
+  
+  # Storage modules
+  database_storage:
+    class: "src.financial_data_collector.core.storage.database.DatabaseStorage"
+    enabled: true
+    dependencies: ["config_manager"]
+    startup_order: 2
+    shutdown_order: 8
+    config:
+      connection_string: "${DATABASE_URL}"
+      table_prefix: "fdc_"
+      batch_size: 1000
+      connection_pool_size: 10
+    health_check:
+      enabled: true
+      interval: 60
+      timeout: 15
+  
+  cache_storage:
+    class: "src.financial_data_collector.core.storage.cache.CacheStorage"
+    enabled: true
+    dependencies: ["config_manager"]
+    startup_order: 2
+    shutdown_order: 8
+    config:
+      cache_type: "redis"
+      connection_string: "${REDIS_URL}"
+      default_ttl: 3600
+      max_memory: "1GB"
+    health_check:
+      enabled: true
+      interval: 60
+      timeout: 10
+  
+  pit_storage:
+    class: "src.financial_data_collector.core.storage.pit_storage.PITStorage"
+    enabled: true
+    dependencies: ["config_manager"]
+    startup_order: 2
+    shutdown_order: 8
+    config:
+      storage_path: "./data/pit"
+      compression: "snappy"
+      max_file_size: "100MB"
+    health_check:
+      enabled: true
+      interval: 60
+      timeout: 10
+
+# Health monitoring configuration
+health_monitoring:
+  enabled: true
+  global_interval: 30
+  alert_channels:
+    - "email"
+    - "slack"
+  alert_threshold: 3
+  recovery_threshold: 2
+
+# Logging configuration
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  handlers:
+    console:
+      enabled: true
+      level: "INFO"
+    file:
+      enabled: true
+      level: "DEBUG"
+      filename: "logs/financial_data_collector.log"
+      max_bytes: 10485760  # 10MB
+      backup_count: 5
+
+# Security configuration
+security:
+  api_key_required: true
+  rate_limiting:
+    enabled: true
+    requests_per_minute: 100
+  cors:
+    enabled: true
+    allowed_origins: ["*"]
+  encryption:
+    enabled: false
+    algorithm: "AES-256-GCM"
+
+# Performance configuration
+performance:
+  max_memory_usage: "2GB"
+  gc_threshold: 0.8
+  async_workers: 10
+  connection_pool_size: 20

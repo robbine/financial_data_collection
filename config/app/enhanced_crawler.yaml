@@ -1,0 +1,258 @@
+# Enhanced Web Crawler Configuration
+# This configuration demonstrates all advanced features available in the Financial Data Collector
+
+# Base crawler configuration
+web_crawler:
+  class: "src.financial_data_collector.core.crawler.enhanced_web_crawler.EnhancedWebCrawler"
+  enabled: true
+  dependencies: ["config_manager"]
+  startup_order: 2
+  shutdown_order: 8
+  
+  config:
+    # Basic browser configuration
+    browser:
+      browser_type: "chromium"
+      headless: true
+      viewport:
+        width: 1920
+        height: 1080
+      user_agent: "Financial Data Collector 1.0"
+    
+    # Extraction strategy
+    extraction_strategy: "llm"  # llm, css, xpath
+    request_delay: 1.0
+    max_retries: 3
+    timeout: 30
+    max_concurrent_requests: 5
+    
+    # LLM configuration
+    llm_config:
+      provider: "openai"
+      model: "gpt-4"
+      api_token: "${OPENAI_API_KEY}"
+      instruction: "Extract financial data from the webpage"
+      schema:
+        type: "object"
+        properties:
+          stock_data:
+            type: "object"
+            properties:
+              symbol: {"type": "string"}
+              price: {"type": "number"}
+              volume: {"type": "number"}
+              change: {"type": "number"}
+              market_cap: {"type": "number"}
+          news:
+            type: "array"
+            items:
+              type: "object"
+              properties:
+                title: {"type": "string"}
+                summary: {"type": "string"}
+                timestamp: {"type": "string"}
+    
+    # Enhanced features configuration
+    enhanced:
+      # Proxy pool management
+      proxy_pool:
+        enabled: true
+        rotation_interval: 10  # Switch proxy every 10 requests
+        health_check_interval: 300  # Check proxy health every 5 minutes
+        proxies:
+          - host: "proxy1.example.com"
+            port: 8080
+            username: "user1"
+            password: "pass1"
+            protocol: "http"
+          - host: "proxy2.example.com"
+            port: 8080
+            username: "user2"
+            password: "pass2"
+            protocol: "http"
+          - host: "proxy3.example.com"
+            port: 3128
+            protocol: "http"
+      
+      # Captcha solving
+      captcha_solving:
+        enabled: true
+        service: "2captcha"  # 2captcha, anticaptcha
+        api_key: "${CAPTCHA_API_KEY}"
+        timeout: 300  # 5 minutes timeout
+      
+      # Anti-detection mechanisms
+      anti_detection:
+        enabled: true
+        user_agent_rotation: true
+        viewport_rotation: true
+        random_delays: true
+        min_delay: 1.0
+        max_delay: 3.0
+        headers:
+          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+          Accept-Language: "en-US,en;q=0.5"
+          Accept-Encoding: "gzip, deflate"
+          DNT: "1"
+          Connection: "keep-alive"
+          Upgrade-Insecure-Requests: "1"
+      
+      # Task scheduling and priority
+      task_scheduling:
+        enabled: true
+        max_concurrent: 5
+        priority_queuing: true
+        retry_failed: true
+        max_retries: 3
+        rate_limiting:
+          requests_per_minute: 60
+          requests_per_hour: 1000
+          delay_between_requests: 1.0
+      
+      # Incremental crawling
+      incremental_crawling:
+        enabled: true
+        min_interval: 3600  # 1 hour between crawls
+        content_hash_check: true
+        storage_backend: "redis"  # redis, database, file
+        storage_config:
+          redis_url: "redis://localhost:6379"
+          key_prefix: "crawl_cache:"
+          ttl: 86400  # 24 hours
+      
+      # Advanced monitoring
+      monitoring:
+        enabled: true
+        metrics_collection: true
+        alerting: true
+        alert_thresholds:
+          success_rate: 0.5  # Alert if success rate < 50%
+          response_time: 30.0  # Alert if avg response time > 30s
+          block_rate: 0.1  # Alert if block rate > 10%
+        alert_channels:
+          - type: "email"
+            smtp_server: "smtp.gmail.com"
+            smtp_port: 587
+            username: "${ALERT_EMAIL}"
+            password: "${ALERT_EMAIL_PASSWORD}"
+            recipients: ["admin@example.com"]
+          - type: "webhook"
+            url: "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK"
+      
+      # Distributed crawling
+      distributed:
+        enabled: false
+        coordinator_url: "http://coordinator:8000"
+        worker_id: "worker-1"
+        heartbeat_interval: 30
+        task_timeout: 300
+      
+      # Data processing pipeline
+      data_processing:
+        enabled: true
+        pipeline:
+          - name: "content_cleaner"
+            class: "ContentCleaner"
+            config:
+              remove_scripts: true
+              remove_styles: true
+              normalize_whitespace: true
+          - name: "financial_extractor"
+            class: "FinancialDataExtractor"
+            config:
+              extract_prices: true
+              extract_volumes: true
+              extract_news: true
+          - name: "data_validator"
+            class: "DataValidator"
+            config:
+              validate_prices: true
+              validate_dates: true
+              check_completeness: true
+          - name: "data_transformer"
+            class: "DataTransformer"
+            config:
+              output_format: "json"
+              include_metadata: true
+      
+      # Storage configuration
+      storage:
+        primary: "database"
+        fallback: "file"
+        database:
+          url: "${DATABASE_URL}"
+          table: "crawled_data"
+          batch_size: 100
+        file:
+          path: "/data/crawled"
+          format: "jsonl"
+          compression: "gzip"
+      
+      # Security and compliance
+      security:
+        ssl_verification: true
+        follow_redirects: true
+        max_redirects: 5
+        respect_robots_txt: true
+        robots_txt_cache_ttl: 3600
+        cookie_jar: true
+        session_persistence: true
+      
+      # Performance optimization
+      performance:
+        connection_pooling: true
+        connection_pool_size: 10
+        keep_alive: true
+        compression: true
+        caching:
+          enabled: true
+          backend: "redis"
+          ttl: 3600
+          max_size: "100MB"
+      
+      # Financial data specific settings
+      financial_data:
+        target_sites:
+          - domain: "finance.yahoo.com"
+            selectors:
+              price: "[data-field='regularMarketPrice']"
+              volume: "[data-field='regularMarketVolume']"
+              change: "[data-field='regularMarketChange']"
+            rate_limit: 2.0  # 2 seconds between requests
+          - domain: "marketwatch.com"
+            selectors:
+              price: ".intraday__price"
+              volume: ".volume"
+            rate_limit: 3.0
+          - domain: "bloomberg.com"
+            selectors:
+              price: "[data-module='Quote']"
+            rate_limit: 5.0
+        
+        data_sources:
+          stocks:
+            - "AAPL", "MSFT", "GOOGL", "TSLA", "AMZN"
+          indices:
+            - "SPY", "QQQ", "IWM", "VTI"
+          crypto:
+            - "BTC-USD", "ETH-USD", "ADA-USD"
+        
+        update_frequency:
+          real_time: 30  # seconds
+          daily: 3600  # 1 hour
+          weekly: 86400  # 1 day
+
+# Health check configuration
+health_check:
+  enabled: true
+  interval: 60
+  timeout: 15
+  checks:
+    - name: "proxy_pool"
+      enabled: true
+    - name: "captcha_solver"
+      enabled: true
+    - name: "task_scheduler"
+      enabled: true
+    - name: "monitoring"
+      enabled: true

@@ -1,0 +1,236 @@
+# Enhanced Web Crawler Configuration - No Proxy Version
+# This configuration disables proxy features for cost-saving
+
+# Base crawler configuration
+web_crawler:
+  class: "src.financial_data_collector.core.crawler.enhanced_web_crawler.EnhancedWebCrawler"
+  enabled: true
+  dependencies: ["config_manager"]
+  startup_order: 2
+  shutdown_order: 8
+  
+  config:
+    # Basic browser configuration
+    browser:
+      browser_type: "chromium"
+      headless: true
+      viewport:
+        width: 1920
+        height: 1080
+      user_agent: "Financial Data Collector 1.0"
+    
+    # Extraction strategy
+    extraction_strategy: "llm"  # llm, css, xpath
+    request_delay: 2.0  # Increased delay to be more respectful
+    max_retries: 3
+    timeout: 30
+    max_concurrent_requests: 3  # Reduced for no-proxy usage
+    
+    # LLM configuration
+    llm_config:
+      provider: "openai"
+      model: "gpt-4"
+      api_token: "${OPENAI_API_KEY}"
+      instruction: "Extract financial data from the webpage"
+      schema:
+        type: "object"
+        properties:
+          stock_data:
+            type: "object"
+            properties:
+              symbol: {"type": "string"}
+              price: {"type": "number"}
+              volume: {"type": "number"}
+              change: {"type": "number"}
+              market_cap: {"type": "number"}
+          news:
+            type: "array"
+            items:
+              type: "object"
+              properties:
+                title: {"type": "string"}
+                summary: {"type": "string"}
+                timestamp: {"type": "string"}
+    
+    # Enhanced features configuration
+    enhanced:
+      # Proxy pool management - DISABLED
+      proxy_pool:
+        enabled: false  # Disabled to save costs
+        rotation_interval: 10
+        health_check_interval: 300
+        proxies: []  # Empty proxy list
+      
+      # Captcha solving - DISABLED (optional)
+      captcha_solving:
+        enabled: false  # Disabled to save costs
+        service: "2captcha"
+        api_key: null
+        timeout: 300
+      
+      # Anti-detection mechanisms - ENABLED (free features)
+      anti_detection:
+        enabled: true  # Free features
+        user_agent_rotation: true
+        viewport_rotation: true
+        random_delays: true
+        min_delay: 2.0  # Increased delays
+        max_delay: 5.0
+        headers:
+          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+          Accept-Language: "en-US,en;q=0.5"
+          Accept-Encoding: "gzip, deflate"
+          DNT: "1"
+          Connection: "keep-alive"
+          Upgrade-Insecure-Requests: "1"
+      
+      # Task scheduling and priority - ENABLED (free features)
+      task_scheduling:
+        enabled: true
+        max_concurrent: 3  # Reduced for no-proxy usage
+        priority_queuing: true
+        retry_failed: true
+        max_retries: 3
+        rate_limiting:
+          requests_per_minute: 30  # More conservative
+          requests_per_hour: 500   # More conservative
+          delay_between_requests: 2.0
+      
+      # Incremental crawling - ENABLED (free features)
+      incremental_crawling:
+        enabled: true
+        min_interval: 3600  # 1 hour between crawls
+        content_hash_check: true
+        storage_backend: "redis"
+        storage_config:
+          redis_url: "redis://localhost:6379"
+          key_prefix: "crawl_cache:"
+          ttl: 86400  # 24 hours
+      
+      # Advanced monitoring - ENABLED (free features)
+      monitoring:
+        enabled: true
+        metrics_collection: true
+        alerting: false  # Disabled to avoid email costs
+        alert_thresholds:
+          success_rate: 0.5
+          response_time: 30.0
+          block_rate: 0.1
+        alert_channels: []  # No alert channels
+      
+      # Distributed crawling - DISABLED
+      distributed:
+        enabled: false
+        coordinator_url: "http://coordinator:8000"
+        worker_id: "worker-1"
+        heartbeat_interval: 30
+        task_timeout: 300
+      
+      # Data processing pipeline - ENABLED (free features)
+      data_processing:
+        enabled: true
+        pipeline:
+          - name: "content_cleaner"
+            class: "ContentCleaner"
+            config:
+              remove_scripts: true
+              remove_styles: true
+              normalize_whitespace: true
+          - name: "financial_extractor"
+            class: "FinancialDataExtractor"
+            config:
+              extract_prices: true
+              extract_volumes: true
+              extract_news: true
+          - name: "data_validator"
+            class: "DataValidator"
+            config:
+              validate_prices: true
+              validate_dates: true
+              check_completeness: true
+          - name: "data_transformer"
+            class: "DataTransformer"
+            config:
+              output_format: "json"
+              include_metadata: true
+      
+      # Storage configuration - ENABLED (free features)
+      storage:
+        primary: "database"
+        fallback: "file"
+        database:
+          url: "${DATABASE_URL}"
+          table: "crawled_data"
+          batch_size: 100
+        file:
+          path: "/data/crawled"
+          format: "jsonl"
+          compression: "gzip"
+      
+      # Security and compliance - ENABLED (free features)
+      security:
+        ssl_verification: true
+        follow_redirects: true
+        max_redirects: 5
+        respect_robots_txt: true
+        robots_txt_cache_ttl: 3600
+        cookie_jar: true
+        session_persistence: true
+      
+      # Performance optimization - ENABLED (free features)
+      performance:
+        connection_pooling: true
+        connection_pool_size: 5  # Reduced for no-proxy usage
+        keep_alive: true
+        compression: true
+        caching:
+          enabled: true
+          backend: "redis"
+          ttl: 3600
+          max_size: "50MB"  # Reduced cache size
+      
+      # Financial data specific settings
+      financial_data:
+        target_sites:
+          - domain: "finance.yahoo.com"
+            selectors:
+              price: "[data-field='regularMarketPrice']"
+              volume: "[data-field='regularMarketVolume']"
+              change: "[data-field='regularMarketChange']"
+            rate_limit: 3.0  # More conservative
+          - domain: "marketwatch.com"
+            selectors:
+              price: ".intraday__price"
+              volume: ".volume"
+            rate_limit: 4.0  # More conservative
+          - domain: "bloomberg.com"
+            selectors:
+              price: "[data-module='Quote']"
+            rate_limit: 6.0  # More conservative
+        
+        data_sources:
+          stocks:
+            - "AAPL", "MSFT", "GOOGL", "TSLA", "AMZN"
+          indices:
+            - "SPY", "QQQ", "IWM", "VTI"
+          crypto:
+            - "BTC-USD", "ETH-USD", "ADA-USD"
+        
+        update_frequency:
+          real_time: 60  # 1 minute (more conservative)
+          daily: 7200    # 2 hours
+          weekly: 86400  # 1 day
+
+# Health check configuration
+health_check:
+  enabled: true
+  interval: 60
+  timeout: 15
+  checks:
+    - name: "task_scheduler"
+      enabled: true
+    - name: "monitoring"
+      enabled: true
+    # Proxy and captcha checks disabled
+
+

@@ -1,0 +1,160 @@
+# Custom Model Configuration for Financial Data Collector
+# Using your specific model endpoint: ep-20250725215501-7zrfm
+
+# Web crawler with custom model
+web_crawler:
+  class: "src.financial_data_collector.core.crawler.web_crawler.WebCrawler"
+  enabled: true
+  dependencies: ["config_manager"]
+  startup_order: 2
+  shutdown_order: 8
+  
+  config:
+    # Basic browser configuration
+    browser:
+      browser_type: "chromium"
+      headless: true
+      viewport:
+        width: 1920
+        height: 1080
+      user_agent: "Financial Data Collector 1.0"
+    
+    # Extraction strategy
+    extraction_strategy: "llm"  # Use LLM extraction
+    request_delay: 1.0
+    max_retries: 3
+    timeout: 30
+    max_concurrent_requests: 5
+    
+    # Custom model configuration
+    llm_config:
+      provider: "volc"  # Use Volcano Engine
+      api_key: "${VOLC_API_KEY}"  # Your Volcano Engine API key
+      base_url: "${VOLC_BASE_URL}"  # Your Volcano Engine base URL
+      model: "ep-20250725215501-7zrfm"  # Your custom model endpoint
+      instruction: |
+        You are a specialized financial data extraction AI. Extract financial data from the webpage with high accuracy.
+        
+        Focus on:
+        1. Stock prices, volume, and market data
+        2. Company information and financial metrics
+        3. News articles and financial reports
+        4. Market trends and analysis
+        5. Earnings data and financial statements
+        
+        Return structured data with clear categorization of financial information.
+        Ensure data accuracy and completeness.
+      schema:
+        type: "object"
+        properties:
+          stock_data:
+            type: "object"
+            properties:
+              symbol: {"type": "string", "description": "Stock symbol"}
+              price: {"type": "number", "description": "Current stock price"}
+              volume: {"type": "number", "description": "Trading volume"}
+              change: {"type": "number", "description": "Price change"}
+              change_percent: {"type": "number", "description": "Percentage change"}
+              market_cap: {"type": "number", "description": "Market capitalization"}
+              pe_ratio: {"type": "number", "description": "Price-to-earnings ratio"}
+              dividend_yield: {"type": "number", "description": "Dividend yield"}
+              high_52w: {"type": "number", "description": "52-week high"}
+              low_52w: {"type": "number", "description": "52-week low"}
+            required: ["symbol", "price"]
+          news:
+            type: "array"
+            items:
+              type: "object"
+              properties:
+                title: {"type": "string", "description": "News headline"}
+                summary: {"type": "string", "description": "News summary"}
+                timestamp: {"type": "string", "description": "Publication timestamp"}
+                url: {"type": "string", "description": "News URL"}
+                sentiment: {"type": "string", "enum": ["positive", "negative", "neutral"], "description": "Sentiment analysis"}
+                relevance: {"type": "number", "minimum": 0, "maximum": 1, "description": "Relevance score"}
+              required: ["title", "summary"]
+          company_info:
+            type: "object"
+            properties:
+              name: {"type": "string", "description": "Company name"}
+              sector: {"type": "string", "description": "Business sector"}
+              industry: {"type": "string", "description": "Industry classification"}
+              description: {"type": "string", "description": "Company description"}
+              employees: {"type": "number", "description": "Number of employees"}
+              headquarters: {"type": "string", "description": "Headquarters location"}
+              founded: {"type": "string", "description": "Founded date"}
+              ceo: {"type": "string", "description": "CEO name"}
+            required: ["name", "sector"]
+          market_data:
+            type: "object"
+            properties:
+              market_cap: {"type": "number", "description": "Market capitalization"}
+              enterprise_value: {"type": "number", "description": "Enterprise value"}
+              revenue: {"type": "number", "description": "Annual revenue"}
+              profit: {"type": "number", "description": "Net profit"}
+              debt_to_equity: {"type": "number", "description": "Debt-to-equity ratio"}
+              price_to_earnings: {"type": "number", "description": "P/E ratio"}
+              price_to_sales: {"type": "number", "description": "P/S ratio"}
+              price_to_book: {"type": "number", "description": "P/B ratio"}
+              return_on_equity: {"type": "number", "description": "ROE"}
+              return_on_assets: {"type": "number", "description": "ROA"}
+          earnings:
+            type: "object"
+            properties:
+              quarterly_earnings: {"type": "array", "description": "Quarterly earnings data"}
+              annual_earnings: {"type": "array", "description": "Annual earnings data"}
+              earnings_growth: {"type": "number", "description": "Earnings growth rate"}
+              revenue_growth: {"type": "number", "description": "Revenue growth rate"}
+              profit_margin: {"type": "number", "description": "Profit margin"}
+          technical_indicators:
+            type: "object"
+            properties:
+              moving_averages: {"type": "object", "description": "Moving average data"}
+              rsi: {"type": "number", "description": "Relative Strength Index"}
+              macd: {"type": "object", "description": "MACD indicators"}
+              bollinger_bands: {"type": "object", "description": "Bollinger Bands data"}
+    
+    # Financial data specific selectors (fallback for CSS extraction)
+    financial_selectors:
+      price: [".price", ".quote-price", "[data-testid*='price']", "[data-field='regularMarketPrice']"]
+      volume: [".volume", ".quote-volume", "[data-testid*='volume']", "[data-field='regularMarketVolume']"]
+      change: [".change", ".quote-change", "[data-testid*='change']", "[data-field='regularMarketChange']"]
+      market_cap: [".market-cap", ".market-value", "[data-testid*='market-cap']", "[data-field='marketCap']"]
+      news: [".news-item", ".article", ".story", ".financial-news"]
+      financial_data: [".financial-data", ".market-data", ".quote-data"]
+    
+    # Enhanced features (optional)
+    enhanced:
+      proxy_pool:
+        enabled: false  # Disable for demo
+      captcha_solving:
+        enabled: false  # Disable for demo
+      anti_detection:
+        enabled: true
+        user_agent_rotation: true
+        random_delays: true
+        min_delay: 1.0
+        max_delay: 3.0
+      task_scheduling:
+        enabled: false  # Execute immediately for demo
+      incremental_crawling:
+        enabled: false  # Disable for demo
+      monitoring:
+        enabled: true
+        alert_thresholds:
+          success_rate: 0.5
+          response_time: 30.0
+          block_rate: 0.1
+
+# Health check configuration
+health_check:
+  enabled: true
+  interval: 60
+  timeout: 15
+  checks:
+    - name: "llm_connection"
+      enabled: true
+    - name: "browser_functionality"
+      enabled: true
+    - name: "custom_model_availability"
+      enabled: true
