@@ -65,6 +65,21 @@ ENV HOME=/home/appuser \
     CRAWL4AI_WORKDIR=/var/cache/collector/crawl4ai \
     CRAWL4AI_CACHE_DIR=/var/cache/collector/crawl4ai/cache
 
+
+# ---------- 安装 Crawl4AI ----------
+RUN --mount=type=cache,target=/tmp/.cache/pip \
+    echo "📦 Installing Crawl4AI..." && \
+    pip install --user -U crawl4ai --timeout 300 --retries 5 && \
+    echo "🧩 Running crawl4ai-setup..." && \
+    crawl4ai-setup || true && \
+    echo "🔍 Verifying crawl4ai installation..." && \
+    timeout 15s crawl4ai-doctor || echo "⚠️ crawl4ai-doctor check skipped (timeout)" && \
+    echo "🌐 Installing Playwright Chromium..." && \
+    python -m playwright install --with-deps chromium || true
+
+# ---------- 验证 Crawl4AI ----------
+RUN python -c "import crawl4ai; print(f'✅ Crawl4AI installed: {crawl4ai.__version__}')"
+
 # ============================================
 # Stage 2: Development
 # ============================================

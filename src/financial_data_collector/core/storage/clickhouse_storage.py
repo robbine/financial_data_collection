@@ -53,7 +53,7 @@ class ClickHouseStorage(BaseStorage):
             logger.info(f"Resolved ClickHouse host {self.config['host']} to {host_ip}")
             
             # Check port connectivity
-            with closing(socket.socket(socket.AF_INET, socket.SOCK_TCP)) as sock:
+            with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
                 sock.settimeout(5)
                 result = sock.connect_ex((host_ip, self.config['port']))
                 if result == 0:

@@ -25,22 +25,19 @@ services:
         - data_volume:/app/data
         - ./logs:/app/logs
         - ./config/app:/app/config
-        - /app/entrypoint.sh
+        - ./entrypoint.sh:/app/entrypoint.sh
         - data_volume:/app/data
     user: "root:root"  # 临时使用root用户测试权限问题
     depends_on:
-      - postgres
-      - redis
-      - clickhouse
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+      clickhouse:
+        condition: service_healthy
+
     networks:
       - fdc-network
-    
-    
-    
-    
-    
-    
-    
     command: ["python", "-m", "src.financial_data_collector.main", "--debug"]
 
   # ClickHouse for financial data
@@ -126,22 +123,16 @@ services:
     networks:
       - fdc-network
 
-  # pgAdmin for database management
-  pgadmin:
-    image: dpage/pgadmin4:latest
+  fdc-pgadmin:
+    image: dpage/pgadmin4
     container_name: fdc-pgadmin
-    restart: unless-stopped
     environment:
-      - PGADMIN_DEFAULT_EMAIL=admin@fdc.local
-      - PGADMIN_DEFAULT_PASSWORD=admin
+      PGADMIN_DEFAULT_EMAIL: hansong1983@gmail.com
+      PGADMIN_DEFAULT_PASSWORD: yourpassword  # 替换成你想要的密码
     ports:
-      - "5050:80"
-    volumes:
-      - pgadmin_data:/var/lib/pgadmin
-    depends_on:
-      - postgres
-    networks:
-      - fdc-network
+      - "8080:80"
+    restart: always
+
 
   # Celery Worker for task processing
   celery-worker:
