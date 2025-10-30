@@ -21,6 +21,7 @@ from .events import (
 from .event_bus import EventBus
 from .handlers import EventHandler, AsyncEventHandler
 from .events import Event, DataCollectedEvent, TaskCompletedEvent, ErrorEvent
+from .domain_events import DomainEvent, KlineDataCollectedEvent, StockSymbolCollectedEvent
 
 __all__ = [
     'EventBus',
@@ -32,4 +33,9 @@ __all__ = [
     'ErrorEvent',
     "ModuleStartedEvent",
     "ModuleStoppedEvent",
+    "ConfigChangedEvent",
+    "HealthCheckEvent",
+    "DomainEvent",
+    "KlineDataCollectedEvent",
+    "StockSymbolCollectedEvent",
 ]

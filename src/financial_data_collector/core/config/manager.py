@@ -5,7 +5,8 @@ from pathlib import Path
 import logging
 logger = logging.getLogger(__name__)
 
-from src.financial_data_collector.core.interfaces import BaseModule
+#from src.financial_data_collector.core.interfaces import BaseModule
+from ..interfaces import BaseModule
 
 class ConfigManager(BaseModule):
     """Configuration manager for loading and accessing application settings"""

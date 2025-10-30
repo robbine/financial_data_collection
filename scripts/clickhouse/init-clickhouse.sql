@@ -1,114 +1,84 @@
--- ClickHouse initialization script for Financial Data Collector
--- This script creates the necessary database, tables, and views
-
--- Create database
+-- Create database if not exists
 CREATE DATABASE IF NOT EXISTS financial_data;
 
--- Use the database
+-- Switch to the target database
 USE financial_data;
 
--- Create financial_data table for storing market data
-CREATE TABLE IF NOT EXISTS financial_data (
-    symbol String,
-    data_type String,
-    price Nullable(Float64),
-    open_price Nullable(Float64),
-    high_price Nullable(Float64),
-    low_price Nullable(Float64),
-    close_price Nullable(Float64),
-    volume Nullable(UInt64),
-    market_cap Nullable(Float64),
-    change Nullable(Float64),
-    change_percent Nullable(Float64),
-    timestamp DateTime,
-    source String,
-    metadata String,
-    task_id Nullable(String)
-) ENGINE = MergeTree()
+-- ============================================================
+-- 1️⃣ 分钟级 K 线表（源数据）
+-- ============================================================
+CREATE TABLE IF NOT EXISTS tv_klines_minute (
+    symbol String COMMENT '股票代码',
+    timestamp DateTime COMMENT 'K线时间戳',
+    open Float64 COMMENT '开盘价',
+    high Float64 COMMENT '最高价',
+    low Float64 COMMENT '最低价',
+    close Float64 COMMENT '收盘价',
+    volume Float64 COMMENT '成交量',
+    turnover Float64 COMMENT '成交额',
+    update_time DateTime DEFAULT now() COMMENT '数据更新时间',
+    create_time DateTime DEFAULT now() COMMENT '数据创建时间'
+)
+ENGINE = ReplacingMergeTree(update_time)
+PARTITION BY toYYYYMMDD(timestamp)
 ORDER BY (symbol, timestamp)
-PARTITION BY toYYYYMM(timestamp)
 TTL timestamp + INTERVAL 1 YEAR
-SETTINGS index_granularity = 8192;
+SETTINGS storage_policy = 'default', index_granularity = 8192;
 
--- Create latest_prices table for fast price lookups
-CREATE TABLE IF NOT EXISTS latest_prices (
-    symbol String,
-    price Nullable(Float64),
-    change Nullable(Float64),
-    change_percent Nullable(Float64),
-    volume Nullable(UInt64),
-    timestamp DateTime,
-    data_type String DEFAULT 'stock'
-) ENGINE = ReplacingMergeTree(timestamp)
+-- ============================================================
+-- 2️⃣ 股票元数据表
+-- ============================================================
+CREATE TABLE IF NOT EXISTS stock_symbols (
+    symbol String COMMENT '股票代码',
+    name String COMMENT '股票名称',
+    exchange String COMMENT '交易所',
+    is_active Bool DEFAULT 1 COMMENT '是否活跃',
+    update_time DateTime DEFAULT now() COMMENT '更新时间'
+)
+ENGINE = ReplacingMergeTree(update_time)
 ORDER BY symbol
-SETTINGS index_granularity = 8192;
+SETTINGS index_granularity = 1024;
 
--- Create news_data table for storing financial news
-CREATE TABLE IF NOT EXISTS news_data (
-    title String,
-    content Nullable(String),
-    url String,
-    symbols Array(String),
-    sentiment Nullable(String),
-    category Nullable(String),
-    published_at Nullable(DateTime),
-    source String,
-    author Nullable(String),
-    language String DEFAULT 'en',
-    timestamp DateTime,
-    metadata String,
-    task_id Nullable(String)
-) ENGINE = MergeTree()
-ORDER BY (source, timestamp)
-PARTITION BY toYYYYMM(timestamp)
-TTL timestamp + INTERVAL 6 MONTH
-SETTINGS index_granularity = 8192;
+-- ============================================================
+-- 3️⃣ 日级聚合视图（物化视图）
+-- ============================================================
+-- 从分钟线自动汇总为日线
+CREATE MATERIALIZED VIEW IF NOT EXISTS tv_klines_daily
+ENGINE = SummingMergeTree()
+PARTITION BY toYYYYMMDD(day_timestamp)
+ORDER BY (symbol, day_timestamp)
+AS
+SELECT
+    symbol,
+    toStartOfDay(timestamp) AS day_timestamp,
+    anyLast(open) AS open,
+    max(high) AS high,
+    min(low) AS low,
+    anyLast(close) AS close,
+    sum(volume) AS volume,
+    sum(turnover) AS turnover,
+    max(update_time) AS update_time
+FROM tv_klines_minute
+GROUP BY
+    symbol,
+    toStartOfDay(timestamp);
 
--- Create crawl_tasks table for storing task information
-CREATE TABLE IF NOT EXISTS crawl_tasks (
-    task_id String,
-    url String,
-    status String,
-    crawler_type String,
-    priority UInt8,
-    config String,
-    created_at DateTime,
-    started_at Nullable(DateTime),
-    completed_at Nullable(DateTime),
-    result Nullable(String),
-    error Nullable(String),
-    retry_count UInt8 DEFAULT 0,
-    max_retries UInt8 DEFAULT 3,
-    metadata String
-) ENGINE = MergeTree()
-ORDER BY (created_at, task_id)
-PARTITION BY toYYYYMM(created_at)
-TTL created_at + INTERVAL 1 MONTH
-SETTINGS index_granularity = 8192;
 
--- Temporarily disabled materialized view for debugging
--- CREATE MATERIALIZED VIEW IF NOT EXISTS latest_prices_mv
--- TO latest_prices AS
--- SELECT 
+
+
+-- ============================================================
+-- ✅ 使用说明
+-- 读取日线聚合结果时，请用 finalizeAggregation() 函数，例如：
+-- SELECT
 --     symbol,
---     price,
---     change,
---     change_percent,
---     volume,
---     timestamp,
---     data_type
--- FROM financial_data
--- ORDER BY symbol, timestamp DESC;
-
--- Absolute minimal initialization script
-CREATE DATABASE IF NOT EXISTS financial_data;
-
-CREATE TABLE IF NOT EXISTS financial_data.simple_test (
-    id UInt64,
-    value String,
-    created_at DateTime DEFAULT now()
-) ENGINE = MergeTree()
-ORDER BY id;
-
-SELECT 'Minimal initialization completed successfully' as status;
-
+--     toDate(timestamp) AS trading_day,
+--     finalizeAggregation(open) AS open,
+--     finalizeAggregation(high) AS high,
+--     finalizeAggregation(low) AS low,
+--     finalizeAggregation(close) AS close,
+--     finalizeAggregation(volume) AS volume,
+--     finalizeAggregation(turnover) AS turnover,
+--     finalizeAggregation(update_time) AS update_time
+-- FROM tv_klines_daily
+-- ORDER BY symbol, trading_day;
+-- ============================================================

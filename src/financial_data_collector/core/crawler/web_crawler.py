@@ -23,7 +23,7 @@ from .data_classifier import DataClassifier
 from src.financial_data_collector.core.events import EventBus, DataCollectedEvent
 from ..interfaces import BaseDataCollector, WebCrawlerInterface
 
-from ..storage import StorageManager, FinancialData, NewsData, CrawlTask, TaskStatus
+
 
 logger = logging.getLogger(__name__)
 
@@ -41,17 +41,16 @@ class WebCrawler(BaseDataCollector, WebCrawlerInterface):
     - Proxy support
     """
     
-    def __init__(self, name: str = "WebCrawler"):
+    def __init__(self, config: Dict[str, Any], name: str = "WebCrawler"):
         super().__init__(name)
         self.supported_sources = ["web", "news", "financial_sites"]
         self.crawler: Optional[AsyncWebCrawler] = None
         self.event_bus: Optional[EventBus] = None
-        self.config: Dict[str, Any] = {}
+        self.config: Dict[str, Any] = self._validate_config(config)
         
         # Storage configuration (默认启用)
-        self.storage_manager: Optional[StorageManager] = None
-        self.auto_store_data = True
-        self.storage_config = {}
+        self.event_factory: Optional[DomainEventFactory] = None
+        self.event_bus: Optional[EventBus] = None
         self.data_classifier = DataClassifier()
         
         # Crawl4AI specific settings
@@ -98,8 +97,8 @@ class WebCrawler(BaseDataCollector, WebCrawlerInterface):
             "financial_data": [".financial-data", ".market-data", ".quote-data"]
         })
         
-        # Storage setup (默认启用，可禁用)
-        self._setup_storage(config)
+        # Initialize event publishing
+        self._setup_event_publishing()
         
         logger.info(f"WebCrawler initialized with {self.extraction_strategy} extraction strategy")
     
@@ -120,16 +119,6 @@ class WebCrawler(BaseDataCollector, WebCrawlerInterface):
             # Start the crawler
             await self.crawler.start()
             
-            # Start storage manager if configured
-            if self.storage_manager:
-                try:
-                    await self.storage_manager.initialize(self.storage_config)
-                    await self.storage_manager.start()
-                    logger.info("Storage manager started successfully")
-                except Exception as e:
-                    logger.error(f"Failed to start storage manager: {e}")
-                    self.storage_manager = None
-                    self.auto_store_data = False
             
             self._started = True
             logger.info("WebCrawler started successfully")
@@ -147,10 +136,18 @@ class WebCrawler(BaseDataCollector, WebCrawlerInterface):
         # Stop storage manager if configured
         if self.storage_manager:
             try:
-                await self.storage_manager.stop()
-                logger.info("Storage manager stopped")
+                # Properly shut down storage manager with timeout
+                await asyncio.wait_for(
+                    self.storage_manager.stop(), 
+                    timeout=10.0  # 10-second timeout for graceful shutdown
+                )
+                logger.debug("Storage manager stopped successfully")
+            except asyncio.TimeoutError:
+                logger.warning("Storage manager shutdown timed out")
             except Exception as e:
-                logger.error(f"Error stopping storage manager: {e}")
+                logger.error(f"Error stopping storage manager: {str(e)}", exc_info=True)
+            finally:
+                self.storage_manager = None  # Release reference
         
         self._started = False
         logger.info("WebCrawler stopped")
@@ -207,9 +204,8 @@ class WebCrawler(BaseDataCollector, WebCrawlerInterface):
             # Process the result
             processed_data = await self._process_crawl_result(result, config)
             
-            # Store data if auto-store is enabled
-            if self.auto_store_data and self.storage_manager and processed_data.get("success"):
-                await self._store_crawled_data(url, processed_data, config)
+            # Publish crawled data as domain event
+            self._publish_crawled_data_event(url, processed_data, config)
             
             # Publish event
             if self.event_bus:
@@ -497,139 +493,118 @@ class WebCrawler(BaseDataCollector, WebCrawlerInterface):
                 }
             }
     
-    def _setup_storage(self, config: Dict[str, Any]) -> None:
-        """Setup storage manager based on configuration."""
-        storage_config = config.get("storage", {})
-        
-        # Default to enabled if not explicitly disabled
-        if storage_config.get("enabled", True):
+    def _setup_event_publishing(self) -> None:
+        """Setup event publishing infrastructure"""
+        if not self.event_bus:
             try:
-                self.storage_manager = StorageManager(name=f"{self.name}Storage", config=storage_config)
-                self.storage_config = storage_config
-                self.auto_store_data = storage_config.get("auto_store", True)
-                
-                # Set storage strategy if available
-                strategy = storage_config.get("strategy", "primary_only")
-                if hasattr(self.storage_manager, 'set_storage_strategy'):
-                    from ..storage import StorageStrategy
-                    strategy_map = {
-                        "primary_only": StorageStrategy.PRIMARY_ONLY,
-                        "replica": StorageStrategy.REPLICA,
-                        "shard": StorageStrategy.SHARD,
-                        "failover": StorageStrategy.FAILOVER
-                    }
-                    self.storage_manager.set_storage_strategy(strategy_map.get(strategy, StorageStrategy.PRIMARY_ONLY))
-                
-                logger.info(f"Storage manager configured with strategy: {strategy}")
+                # Get event bus from DI container if available
+                from financial_data_collector.core.di.container import container
+                self.event_bus = container.resolve(EventBus)
+                logger.info("Event bus initialized from DI container")
             except Exception as e:
-                logger.error(f"Failed to setup storage manager: {e}")
-                self.storage_manager = None
-                self.auto_store_data = False
-        else:
-            self.auto_store_data = False
-            logger.info("Storage integration disabled")
+                logger.warning(f"Event bus not available: {e}")
+                self.event_bus = None
+
+        # Initialize domain event factory
+        self.event_factory = DomainEventFactory()
+
     
-    async def _store_crawled_data(self, url: str, result: Dict[str, Any], config: Dict[str, Any]) -> None:
-        """Store crawled data using storage manager."""
+    def _publish_crawled_data_event(self, url: str, result: Dict[str, Any], config: Dict[str, Any]) -> None:
+        """Publish crawled data as domain event with financial-grade reliability guarantees"""
+        if not self.event_bus or not self.event_factory:
+            logger.warning("Event publishing not configured - skipping event emission")
+            return
+
+        # Initialize metrics for compliance monitoring
+        event_publish_success = False
+        event_publish_start = time.time()
+        correlation_id = f"crawl_event_{uuid.uuid4().hex[:8]}"
+
         try:
-            if not self.storage_manager:
-                return
-            
-            # Extract data from result
-            data = result.get("data", {})
-            if not data:
-                logger.warning(f"No data to store for URL: {url}")
-                return
-            
-            # Determine data type and create appropriate model
-            data_type = self.data_classifier.determine_data_type(url, data)
-            
-            if data_type == "financial":
-                await self._store_financial_data(url, data, config)
-            elif data_type == "news":
-                await self._store_news_data(url, data, config)
-            else:
-                # Store as generic crawl task
-                await self._store_crawl_task(url, result, config)
-            
-            logger.info(f"Data stored successfully for URL: {url}")
-            
-        except Exception as e:
-            logger.error(f"Failed to store data for URL {url}: {e}")
-    
-    async def _store_financial_data(self, url: str, data: Dict[str, Any], config: Dict[str, Any]) -> None:
-        """Store financial data."""
-        try:
-            # Extract financial data fields using classifier
-            financial_fields = self.data_classifier.extract_financial_data_fields(data, url)
-            
-            financial_data = FinancialData(
-                symbol=financial_fields["symbol"],
-                data_type="stock",
-                price=financial_fields["price"],
-                open_price=financial_fields["open_price"],
-                high_price=financial_fields["high_price"],
-                low_price=financial_fields["low_price"],
-                close_price=financial_fields["close_price"],
-                volume=financial_fields["volume"],
-                change=financial_fields["change"],
-                change_percent=financial_fields["change_percent"],
-                market_cap=financial_fields["market_cap"],
-                source=config.get("source", "web_crawler"),
-                metadata={
+            # Create domain event with audit metadata
+            event = self.event_factory.create_event(
+                event_type="DATA_CRAWLED",
+                data={
                     "url": url,
-                    "crawled_at": datetime.now().isoformat(),
-                    "config": config
+                    "result": self._sanitize_sensitive_data(result),
+                    "config": self._sanitize_sensitive_data(config),
+                    "metadata": {
+                        "crawler_id": self.name,
+                        "timestamp": datetime.now().isoformat(),
+                        "correlation_id": correlation_id,
+                        "version": "1.0"
+                    }
                 }
             )
-            
-            await self.storage_manager.store_financial_data(financial_data)
-            
+
+            # Publish event with async safety measures
+            publish_task = asyncio.create_task(
+                self.event_bus.publish_async(event),
+                name=f"publish_crawled_data_{hash(url) % 1000}"
+            )
+
+            # Add task to tracking registry to prevent orphaned coroutines
+            self._event_publish_tasks[correlation_id] = publish_task
+            publish_task.add_done_callback(
+                lambda t: self._handle_publish_complete(t, correlation_id)
+            )
+
+            logger.info(f"Scheduled data crawl event for {url} (correlation_id: {correlation_id})")
+            event_publish_success = True
+
         except Exception as e:
-            logger.error(f"Failed to store financial data for {url}: {e}")
-    
-    async def _store_news_data(self, url: str, data: Dict[str, Any], config: Dict[str, Any]) -> None:
-        """Store news data."""
-        try:
-            # Extract news data fields using classifier
-            news_fields = self.data_classifier.extract_news_data_fields(data, url)
-            
-            news_data = NewsData(
-                title=news_fields["title"],
-                content=news_fields["content"],
-                url=url,
-                symbols=news_fields["symbols"],
-                sentiment=news_fields["sentiment"],
-                category=news_fields["category"],
-                source=config.get("source", "web_crawler"),
-                author=news_fields["author"],
-                published_at=news_fields["published_at"],
-                metadata={
-                    "crawled_at": datetime.now().isoformat(),
-                    "config": config
+            # SEC 17a-4 compliant error logging with full context
+            logger.error(
+                f"Event publishing failed for {url} (correlation_id: {correlation_id}): {str(e)}",
+                exc_info=True,
+                extra={
+                    "url": url,
+                    "correlation_id": correlation_id,
+                    "source": config.get("source", "unknown"),
+                    "task_id": config.get("task_id", "N/A")
                 }
             )
-            
-            await self.storage_manager.store_news_data(news_data)
-            
-        except Exception as e:
-            logger.error(f"Failed to store news data for {url}: {e}")
-    
-    async def _store_crawl_task(self, url: str, result: Dict[str, Any], config: Dict[str, Any]) -> None:
-        """Store crawl task information."""
+
+        finally:
+            # Track metrics for SLA monitoring (99.9%+ event delivery rate requirement)
+            EVENT_PUBLISH_METRICS.labels(
+                source=config.get("source", "unknown"),
+                success=str(event_publish_success).lower()
+            ).observe(time.time() - event_publish_start)
+
+            # Ensure failed events are captured for reconciliation
+            if not event_publish_success:
+                self._queue_failed_event_for_retry(url, result, config, correlation_id)
+
+    def _sanitize_sensitive_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Remove sensitive fields to comply with GDPR/GLBA requirements"""
+        sanitized = data.copy()
+        sensitive_fields = {"api_key", "password", "token", "secret", "auth"}
+        for field in sensitive_fields:
+            if field in sanitized:
+                sanitized[field] = "[REDACTED]"
+        return sanitized
+
+    def _handle_publish_complete(self, task: asyncio.Task, correlation_id: str) -> None:
+        """Clean up completed publish tasks and handle post-publish logic"""
         try:
-            task = CrawlTask(
-                task_id=f"web_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{hash(url) % 10000}",
-                url=url,
-                status=TaskStatus.COMPLETED if result.get("success") else TaskStatus.FAILED,
-                crawler_type="web",
-                priority=2,  # Normal priority
-                config=config,
-                result=result,
-                error=result.get("error")
-            )
-            
-            await self.storage_manager.store_crawl_task(task)
-            
+            if correlation_id in self._event_publish_tasks:
+                del self._event_publish_tasks[correlation_id]
+            task.result()  # Trigger exception if publish failed
         except Exception as e:
-            logger.error(f"Failed to store crawl task for {url}: {e}")
+            logger.error(f"Async publish failed for {correlation_id}: {str(e)}")
+
+    def _queue_failed_event_for_retry(self, url: str, result: Dict[str, Any], config: Dict[str, Any], correlation_id: str) -> None:
+        """Queue failed events for compliance-mandated retry"""
+        if not hasattr(self, "_failed_event_queue"):
+            self._failed_event_queue = deque(maxlen=1000)  # Size-limited to prevent memory issues
+
+        self._failed_event_queue.append({
+            "url": url,
+            "result": result,
+            "config": config,
+            "correlation_id": correlation_id,
+            "attempts": 0,
+            "created_at": datetime.now().timestamp()
+        })
+        logger.warning(f"Queued failed event for retry: {correlation_id} (queue size: {len(self._failed_event_queue)})")

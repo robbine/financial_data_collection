@@ -72,7 +72,7 @@ clickhouse:
   port: 9000
   database: financial_data
   username: default
-  password: default_password
+  password: ''
   secure: false
   verify: false
   max_connections: 10
@@ -96,7 +96,7 @@ web_crawler:
           port: 9000
           database: "financial_data"
           username: "default"
-          password: ""
+          password: ''
 
 # Enhanced WebCrawler configuration
 enhanced_crawler:
@@ -126,3 +126,7 @@ modules:
     class: src.financial_data_collector.core.storage.clickhouse_storage.ClickHouseStorage
     dependencies: ["config_manager"]
     enabled: true
+
+features:
+  plugin_system: false
+  plugin_registry_wedge: true

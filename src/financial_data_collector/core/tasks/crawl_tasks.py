@@ -140,6 +140,20 @@ async def _execute_crawl_task(task_id: str, url: str, config: Dict[str, Any],
                 logger.warning(f"Error stopping crawler for task {task_id}: {e}")
 
 
+def infer_data_source_from_urls(urls: List[str]) -> str:
+    """从URL推断数据源类型（投行级降级策略）"""
+    domains = {urlparse(url).netloc for url in urls}
+    
+    if any('sec.gov' in domain for domain in domains):
+        return 'edgar'
+    elif any('bloomberg.com' in domain for domain in domains):
+        return 'bloomberg'
+    elif any('reuters.com' in domain for domain in domains):
+        return 'reuters'
+    else:
+        return 'default'
+    
+
 @celery_app.task(bind=True, name='crawl_url_batch')
 def crawl_url_batch(self, urls: List[str], config: Dict[str, Any], 
                    crawler_type: str = 'web', priority: str = 'normal') -> Dict[str, Any]:
@@ -174,9 +188,11 @@ def crawl_url_batch(self, urls: List[str], config: Dict[str, Any],
             # Sequential processing
             for i, url in enumerate(urls):
                 try:
+                    data_source = config.get('data_source') or infer_data_source_from_urls(urls)
+                    target_queue = get_validated_queue(data_source)
                     result = crawl_task.apply_async(
                         args=[url, config, crawler_type, priority],
-                        queue='crawl_queue'
+                        queue=target_queue
                     ).get(timeout=300)  # 5 minute timeout per URL
                     
                     batch_results.append(result)

@@ -13,6 +13,36 @@ from abc import ABC, abstractmethod
 T = TypeVar('T')
 
 
+from dependency_injector import containers, providers
+from ..events.event_bus import EventBus
+from ..storage.storage_adapter import PrimaryFallbackAdapter
+from ..handlers.kline_data_handler import KlineDataPersistenceHandler
+from ..crawler.web_crawler import WebCrawler
+from ..plugin_registry import PluginRegistry
+
+class CoreContainer(containers.DeclarativeContainer):
+    event_bus = providers.Singleton(EventBus)
+    storage_adapter = providers.Singleton(PrimaryFallbackAdapter)
+
+    # 事件处理器注册
+    kline_handler = providers.Singleton(
+        KlineDataPersistenceHandler,
+        storage_adapter=storage_adapter
+    )
+
+    # 爬虫实例化
+    web_crawler = providers.Factory(
+        WebCrawler,
+        event_bus=event_bus
+    )
+
+    def wire(self):
+        # 注册事件订阅关系
+        self.event_bus().subscribe(
+            KlineDataCollectedEvent,
+            self.kline_handler().handle
+        )
+
 class ServiceProvider(ABC):
     """Abstract base class for service providers."""
     
@@ -63,7 +93,11 @@ class DIContainer:
     - Dependency resolution
     """
     
-    def __init__(self):
+    def __init__(self, config):
+        if config.get('features', {}).get('plugin_registry_wedge', False):
+            self.plugin_registry = providers.Singleton(PluginRegistry)
+        else:
+            self.plugin_registry = providers.Object(None)
         self._services: Dict[Type, ServiceProvider] = {}
         self._instances: Dict[Type, Any] = {}
         self._lock = threading.Lock()
@@ -203,3 +237,58 @@ class DIContainer:
             Dictionary of registered service types
         """
         return {**self._services, **self._instances}
+    
+    def has_dependency(self, name: str) -> bool:
+        """
+        Check if a dependency is registered by name.
+        
+        Args:
+            name: The dependency name to check
+            
+        Returns:
+            True if dependency exists, False otherwise
+        """
+        # Check if any registered service has this name as a parameter
+        for service_type, provider in self._services.items():
+            if hasattr(service_type, '__init__'):
+                sig = inspect.signature(service_type.__init__)
+                if name in sig.parameters:
+                    return True
+        
+        # Check instances
+        for service_type, instance in self._instances.items():
+            if hasattr(service_type, '__init__'):
+                sig = inspect.signature(service_type.__init__)
+                if name in sig.parameters:
+                    return True
+        
+        return False
+    
+    async def get_dependency(self, name: str) -> Any:
+        """
+        Get a dependency by name.
+        
+        Args:
+            name: The dependency name
+            
+        Returns:
+            The dependency instance
+            
+        Raises:
+            ValueError: If dependency is not found
+        """
+        # Try to find a service that has this parameter
+        for service_type, provider in self._services.items():
+            if hasattr(service_type, '__init__'):
+                sig = inspect.signature(service_type.__init__)
+                if name in sig.parameters:
+                    return self.get(service_type)
+        
+        # Check instances
+        for service_type, instance in self._instances.items():
+            if hasattr(service_type, '__init__'):
+                sig = inspect.signature(service_type.__init__)
+                if name in sig.parameters:
+                    return instance
+        
+        raise ValueError(f"Dependency '{name}' not found")

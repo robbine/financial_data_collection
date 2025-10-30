@@ -1,0 +1,11 @@
+groups:
+- name: financial.rules
+  rules:
+  - record: fdc:request_rate
+    expr: rate(http_requests_total[5m])
+    labels:
+      service: financial-data-collector-dev
+  - record: fdc:error_rate
+    expr: rate(http_requests_total{status=~"5.."}[5m])
+    labels:
+      service: financial-data-collector-dev
