@@ -57,7 +57,7 @@ class ClickHouseStorage(BaseStorage):
         self.username = self.config['user']
         self.password = self.config['password']
         self.batch_size = self.config['batch_size']
-        logger.error(f"ClickHouse connection parameters - User: '{self.username}', Password: '{self.password}', Host: '{self.host}', Port: {self.port}, DB: '{self.database}'")
+        #logger.error(f"ClickHouse connection parameters - User: '{self.username}', Password: '{self.password}', Host: '{self.host}', Port: {self.port}, DB: '{self.database}'")
         
 
     async def initialize(self) -> None:

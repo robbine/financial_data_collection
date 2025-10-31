@@ -282,6 +282,27 @@ class ModuleManager:
         """
         return self._modules.get(module_name)
         
+    def get_module_status(self) -> Dict[str, Any]:
+        """获取模块状态
+        
+        Args:
+            module_name: 要获取状态的模块名称
+        
+        Returns:
+            模块状态对象，若模块不存在则返回None
+        """
+        return {name: info.state.value for name, info in self._modules.items()}
+    
+    def get_module_statuses(self) -> List[Dict[str, str]]:
+        """获取所有模块状态详情列表（符合金融级监控标准）
+        Returns:
+            标准化状态列表，格式为 [{'name': '模块名', 'state': '状态值'}, ...]
+        """
+        return [
+            {'name': name, 'state': info.state.value}
+            for name, info in self._modules.items()
+        ]
+        
     async def initialize(self, config: Dict[str, Any]) -> None:
         """
         初始化模块管理器
@@ -544,6 +565,69 @@ class ModuleManager:
                 self._running = False
                 raise
 
+    async def stop_all_modules(self) -> None:
+        """
+        停止所有正在运行的模块，遵循关闭顺序和依赖关系
+        
+        Raises:
+            RuntimeError: 当模块管理器未初始化或未在运行时
+        """
+        async with self._lock:
+            if not self._initialized:
+                raise RuntimeError("ModuleManager has not been initialized")
+            if not self._running:
+                self.logger.warning("Modules are not running")
+                return
+
+            self.logger.info("Stopping all running modules...")
+            shutdown_tasks = []
+
+            try:
+                # 1. 按关闭顺序排序模块（升序 = 先关闭低优先级）
+                sorted_modules = sorted(
+                    [m for m in self._modules.values() if m.config.enabled and m.state.is_active()],
+                    key=lambda x: x.config.shutdown_order
+                )
+
+                if not sorted_modules:
+                    self.logger.warning("No running modules found to stop")
+                    return
+
+                # 2. 为每个模块创建停止任务
+                for module_info in sorted_modules:
+                    task = asyncio.create_task(
+                        self._stop_module(module_info),
+                        name=f"stop_module_{module_info.name}"
+                    )
+                    shutdown_tasks.append(task)
+
+                # 3. 等待所有停止任务完成
+                results = await asyncio.gather(*shutdown_tasks, return_exceptions=True)
+
+                # 4. 处理停止结果
+                for i, result in enumerate(results):
+                    module_info = sorted_modules[i]
+                    if isinstance(result, Exception):
+                        self.logger.error(
+                            f"Failed to stop module {module_info.name}: {str(result)}",
+                            exc_info=result
+                        )
+                    else:
+                        self.logger.info(f"Module {module_info.name} stopped successfully")
+
+                # 5. 清理健康检查任务
+                for task in self._health_check_tasks.values():
+                    if not task.done():
+                        task.cancel()
+                self._health_check_tasks.clear()
+
+                self._running = False
+                self.logger.info("All modules stopped successfully")
+
+            except Exception as e:
+                self.logger.error(f"Error during module shutdown: {e}", exc_info=True)
+                raise
+            
     async def _start_module(self, module_info: ModuleInfo) -> None:
         """
         启动单个模块的内部辅助方法

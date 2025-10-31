@@ -1,6 +1,6 @@
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, List
 import time
-from prometheus_client import Counter, Histogram, Gauge, Info
+from prometheus_client import Counter, Histogram, Gauge, Info, CollectorRegistry
 import threading
 
 class MetricsCollector:
@@ -18,11 +18,16 @@ class MetricsCollector:
 
     def _initialize_metrics(self):
         """初始化金融级监控指标"""
+        # 添加Prometheus 指标注册表
+        self.registry = CollectorRegistry()
+        
+        
         # 数据采集指标
         self.data_collection_total = Counter(
             'financial_data_collection_total',
             'Total number of financial data collection tasks',
-            ['source', 'data_type', 'status']
+            ['source', 'data_type', 'status'],
+            registry=self.registry
         )
 
         # 采集延迟指标（微秒级）- 量化系统关键指标
@@ -30,34 +35,39 @@ class MetricsCollector:
             'financial_data_collection_latency_us',
             'Latency of financial data collection in microseconds',
             ['source', 'data_type'],
-            buckets=[100, 500, 1000, 5000, 10000, 50000, 100000, 500000]
+            buckets=[100, 500, 1000, 5000, 10000, 50000, 100000, 500000],
+            registry=self.registry
         )
 
         # 存储性能指标
         self.storage_operation_latency = Histogram(
             'financial_storage_operation_latency_us',
             'Latency of storage operations in microseconds',
-            ['operation', 'storage_type', 'status']
+            ['operation', 'storage_type', 'status'],
+            registry=self.registry
         )
 
         # 系统健康指标
         self.active_collectors = Gauge(
             'financial_active_collectors',
             'Number of active data collectors',
-            ['source']
+            ['source'],
+            registry=self.registry
         )
 
         # 数据质量指标
         self.data_validation_errors = Counter(
             'financial_data_validation_errors',
             'Number of financial data validation errors',
-            ['source', 'error_type']
+            ['source', 'error_type'],
+            registry=self.registry
         )
 
         # 系统信息指标
         self.system_info = Info(
             'financial_data_system',
-            'Financial data collection system information'
+            'Financial data collection system information',
+            registry=self.registry
         )
 
     def record_collection_start(self, source: str, data_type: str) -> Dict[str, Any]:
@@ -107,6 +117,32 @@ class MetricsCollector:
     def set_system_info(self, info: Dict[str, str]):
         """设置系统信息"""
         self.system_info.info(info)
+
+    def register_gauge(self, name: str, description: str, labels: list[str]) -> Gauge:
+        gauge = Gauge(name, description, labels, registry=self.registry)
+        setattr(self, name, gauge)
+        return gauge
+
+    def register_counter(self, name: str, description: str, labels: List[str] = None, registry: CollectorRegistry = None) -> Counter:
+        """Register a Prometheus Counter metric
+        
+        Args:
+            name: Metric name
+            description: Metric description
+            labelnames: List of label names for the metric
+        """
+        if registry is None:
+            registry = self.registry
+        if labels is None:
+            labels = []
+        counter = Counter(
+            name,
+            description,
+            labelnames=labels,
+            registry=registry
+        )
+        setattr(self, name, counter)
+        return counter
 
     async def start(self) -> None:
         """启动指标收集器"""

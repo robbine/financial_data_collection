@@ -296,7 +296,15 @@ class FinancialDataCollectorApp:
             try:
                 self.plugin_registry = self.di_container.plugin_registry()
                 if self.plugin_registry:
-                    await self.plugin_registry.initialize(self.config)
+                    # 检查initialize是否为异步方法
+                    if hasattr(self.plugin_registry, 'initialize'):
+                        if asyncio.iscoroutinefunction(self.plugin_registry.initialize):
+                            await self.plugin_registry.initialize(self.config)
+                        else:
+                            self.plugin_registry.initialize(self.config)  # 非异步调用
+                        logger.info("Plugin registry initialized")
+                    else:
+                        logger.warning("PluginRegistry has no initialize method")
                     logger.info("Plugin registry initialized")
             except Exception as e:
                 logger.error(f"Failed to initialize plugin registry: {e}")
@@ -490,20 +498,22 @@ class FinancialDataCollectorApp:
             logger.info("✓ All modules started successfully")
             
             # 记录模块状态
-            module_status = self.module_manager.get_module_status()
+            module_statuses = self.module_manager.get_module_statuses()
             running_count = sum(
-                1 for status in module_status.values() 
+                1 for status in module_statuses
                 if status['state'] == 'running'
             )
-            logger.info(f"📊 Module Status: {running_count}/{len(module_status)} running")
+            logger.info(f"📊 Module Status: {running_count}/{len(module_statuses)} running")
             
-            for name, status in module_status.items():
+            for module in module_statuses:
+                name = module['name']
+                state = module['state']
                 state_emoji = {
                     'running': '✓',
                     'stopped': '✗',
                     'error': '⚠'
-                }.get(status['state'], '?')
-                logger.debug(f"  {state_emoji} {name}: {status['state']}")
+                }.get(state, '?')
+                logger.debug(f"  {state_emoji} {name}: {state}")
             
             # 等待关闭事件
             logger.info("💤 Application is running, waiting for shutdown signal...")
